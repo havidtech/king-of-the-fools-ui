@@ -1,5 +1,6 @@
 import clsx from 'clsx'
 import React from 'react'
+import { formatDate } from '../../utils/helpers'
 import Card from './Card/Card'
 import Styles from './MyClaim.module.css'
 
@@ -17,6 +18,10 @@ const MyClaim = ({
   ethClaim,
   noClaim,
   usdPerETH,
+  nextUSDCDeposit,
+  nextETHDeposit,
+  isOwner,
+  rateUpdatedAt,
   connected
 }) => {
   return (
@@ -43,7 +48,7 @@ const MyClaim = ({
         <form onSubmit={onClickDepositETH} className={Styles.form} >
           <input
             type="string"
-            placeholder="Amount to deposit"
+            placeholder={`Deposit atleast ${nextETHDeposit}`}
             className={Styles.input}
             value={ethInput}
             onChange={onChangeInput}
@@ -56,7 +61,7 @@ const MyClaim = ({
         <form onSubmit={onClickDepositUSDC} className={Styles.form} >
           <input
             type="string"
-            placeholder="Amount to deposit"
+            placeholder={`Deposit atleast ${nextUSDCDeposit}`}
             className={Styles.input}
             value={usdcInput}
             onChange={onChangeInput}
@@ -66,7 +71,9 @@ const MyClaim = ({
             disabled={!connected}
           >Deposit USDC</button>
         </form>
-        <span>Rate: 1 Eth = {usdPerETH} USD (refresh for latest)</span>
+        <span>Rate: 1 Eth = {usdPerETH} USD (updated at {formatDate(rateUpdatedAt)})</span>
+        {isOwner &&
+          <>
             <form onSubmit={onClickWithdrawContractClaim} className={Styles.form} >
               <button type="submit"
                 className={clsx({ [Styles.withdraw_btn]: true, [Styles.btn_diabled]: !connected })}
@@ -84,6 +91,8 @@ const MyClaim = ({
                 className={clsx({ [Styles.unpause_btn]: true, [Styles.btn_diabled]: !connected })}
               >Unpause Contract</button>
             </form>
+          </>
+        }
       </div>
     </div>
   )

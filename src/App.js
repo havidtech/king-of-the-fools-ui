@@ -5,12 +5,13 @@ import KingOfTheFoolsHistory from './components/KingOfTheFoolsHistory/KingOfTheF
 import { useState, useEffect } from 'react'
 import Footer from './components/Footer/Footer';
 import { ethers, utils, Contract } from 'ethers';
-import { randomBytes } from 'ethers/lib/utils';
+import { formatEther, randomBytes } from 'ethers/lib/utils';
 import { defaultAbiCoder } from 'ethers/lib/utils';
 import usdcTokenAbi from './utils/web3/usdc.json'
 import kingOfTheFoolsAbi from './utils/web3/kingOfTheFools.json'
 import priceAggregatorAbi from './utils/web3/priceAggregator.json'
 import { formatUnits, hexlify, parseUnits } from 'ethers/lib/utils';
+import { CURRENCY_ETH } from './constants';
 
 const USDC_TOKEN_ADDRESS = "0x07865c6E87B9F70255377e024ace6630C1Eaa37F";
 const KING_OF_THE_FOOLS_ADDRESS = "0x4dA28Ff81bB435E221c6743471d813b207D28386";
@@ -49,6 +50,14 @@ function App() {
   const [contractOwner, setContractOwner] = useState("");
   const [noClaim, setNoClaim] = useState(true);
   const [usdPerETH, setUsdPerETH] = useState(null);
+  const [rateUpdatedAt, setRateUpdatedAt] = useState(null);
+  const [highestDeposit, setHighestDeposit] = useState(null);
+  const [highestDepositCurrency, setHighestDepositCurrency] = useState(null);
+  const [nextETHDeposit, setNextETHDeposit] = useState(null);
+  const [nextUSDCDeposit, setNextUSDCDeposit] = useState(null);
+
+
+
 
 
 
@@ -165,7 +174,6 @@ function App() {
 
   // a function for fetching necesary data from the contract and also listening for contract event when the page loads
   const init = async () => {
-    alert("Some Autoupdate features don't work as they shoulld, Please Manully Refresh page after executing a transaction to see latest updates.")
     const customProvider = new ethers.providers.JsonRpcProvider(process.env.REACT_APP_RPC_URL)
     const kingOfTheFoolsContractInstance = new Contract(KING_OF_THE_FOOLS_ADDRESS, kingOfTheFoolsAbi, customProvider);
     const kingOfTheFoolsHistory = await kingOfTheFoolsContractInstance.queryFilter("NewKingOfTheFools");
@@ -180,10 +188,27 @@ function App() {
         time: data.args[3].toString(),
       })
     })
-
-
     setKingOfTheFoolsHistory(history);
 
+
+    setHighestDeposit(await  kingOfTheFoolsContractInstance.highestDeposit());
+    const currencyOfHighestDeposit = await  kingOfTheFoolsContractInstance.currencyOfHighestDeposit();
+    setHighestDepositCurrency(Number(currencyOfHighestDeposit));
+
+
+
+    kingOfTheFoolsContractInstance.on("NewKingOfTheFools", (kingOfTheFools, deposit, currency, time) => {
+      const newKingOfTheFools = {
+        kingOfTheFools,
+        deposit,
+        currency: currency.toNumber(),
+        time: time.toString(),
+      }
+
+      setKingOfTheFoolsHistory(prev => [newKingOfTheFools, ...prev]);
+      setHighestDeposit(newKingOfTheFools.deposit)
+      setHighestDepositCurrency(newKingOfTheFools.currency)
+    })
 
     // set contract owner
     const owner = await kingOfTheFoolsContractInstance.owner();
@@ -191,9 +216,16 @@ function App() {
     // set exchange rate
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const priceAggregatorContractInstance = new Contract(PRICE_AGGREGATOR_ADDRESS, priceAggregatorAbi, provider);
-    const usdPerETH = await priceAggregatorContractInstance.latestRoundData();
+    const latestRound = await priceAggregatorContractInstance.latestRoundData();
+    const usdPerETH = Number(latestRound[1]) / 10 ** 8;
+    setUsdPerETH(usdPerETH);
+    setRateUpdatedAt(latestRound[3].toString());
 
-    setUsdPerETH(Number(usdPerETH[1]) / 10 ** 8);
+
+    priceAggregatorContractInstance.on("AnswerUpdated", (current, round, updatedAt) => {
+      setUsdPerETH(Number(current) / 10 ** 8);
+      setRateUpdatedAt(updatedAt.toString());
+    })
 
   }
 
@@ -205,7 +237,22 @@ function App() {
     window.ethereum.on("connect", eagerConnect)
     window.ethereum.on("accountsChanged", handleAccountChanged)
     window.ethereum.on('chainChanged', handleChainChanged);
-  }, [])
+  }, []);
+
+
+  useEffect(() => {
+    if (highestDeposit != null && usdPerETH != null && highestDepositCurrency != null) {
+      if (highestDepositCurrency === CURRENCY_ETH) {
+        const etherDeposit = Number(formatEther(highestDeposit).toString());
+        setNextETHDeposit(etherDeposit * 1.5);
+        setNextUSDCDeposit(usdPerETH * etherDeposit * 1.5);
+      } else {
+        const usdcDeposit = Number(formatUnits(highestDeposit.toString(), 6));
+        setNextUSDCDeposit(usdcDeposit * 1.5);
+        setNextETHDeposit((usdcDeposit / usdPerETH) * 1.5);
+      }
+    }
+  }, [usdPerETH, highestDeposit, highestDepositCurrency]);
 
 
   const connectWallet = async () => {
@@ -249,14 +296,16 @@ function App() {
     const currentKing = await kingOfTheFoolsContractInstance.kingOfTheFools();
     if (currentKing === account.toString()) return alert("You are the current king! are you trying to overthrow yourself?");
     const weiValue = utils.parseEther(ethInput);
-    try{
+
+    try {
       const depositTx = await kingOfTheFoolsContractInstance.depositETH({ value: weiValue });
 
       await provider.getTransaction(depositTx.hash)
       depositTx.wait();
-    }catch(e){
+    } catch (e) {
       return alert("Insufficient Deposit")
     }
+
 
     // Get new balances
     await getAccountDetails(account);
@@ -283,14 +332,15 @@ function App() {
 
     const contractAllowance = await usdcContractInstance.allowance(account.toString(), KING_OF_THE_FOOLS_ADDRESS);
 
-    try{
+
+    try {
       if (+formatUnits(contractAllowance, 6) < usdcInput) {
         const byApproval = window.confirm('Insufficient Allowance, Click OK to increase allowance or Cancel and we will use your signature to get everything done');
         if (byApproval) {
-          await usdcContractInstance.approve(KING_OF_THE_FOOLS_ADDRESS, parseUnits(usdcInput, 6)); 
+          await usdcContractInstance.approve(KING_OF_THE_FOOLS_ADDRESS, parseUnits(usdcInput, 6));
           const usdcUnits = utils.parseUnits(usdcInput, 6);
           const depositTx = await kingOfTheFoolsContractInstance.depositUSDCWithoutPermit(usdcUnits);
-  
+
           await provider.getTransaction(depositTx.hash)
           depositTx.wait();
         }
@@ -299,10 +349,9 @@ function App() {
           await kingOfTheFoolsContractInstance.depositUSDCWithPermit(receiveAuthorization);
         }
       }
-    }catch(e){
+    } catch (e) {
       return alert("Insufficient Deposit")
     }
-
 
 
     // Get new balances
@@ -348,7 +397,7 @@ function App() {
     const accounts = await provider.listAccounts();
     if (!accounts.length) return;
     const account = accounts[0];
-    if(account.toString() !== contractOwner) return alert("You are not the owner of this contract");
+    if (account.toString() !== contractOwner) return alert("You are not the owner of this contract");
     const kingOfTheFoolsContractInstance = new Contract(KING_OF_THE_FOOLS_ADDRESS, kingOfTheFoolsAbi, signer);
     const pauseTx = await kingOfTheFoolsContractInstance.pause();
 
@@ -362,7 +411,7 @@ function App() {
     const accounts = await provider.listAccounts();
     if (!accounts.length) return;
     const account = accounts[0];
-    if(account.toString() !== contractOwner) return alert("You are not the owner of this contract");
+    if (account.toString() !== contractOwner) return alert("You are not the owner of this contract");
     const kingOfTheFoolsConftractInstance = new Contract(KING_OF_THE_FOOLS_ADDRESS, kingOfTheFoolsAbi, signer);
     const unpauseTx = await kingOfTheFoolsConftractInstance.unpause();
 
@@ -468,12 +517,15 @@ function App() {
           onClickWithdrawContractClaim={onClickWithdrawContractClaim}
           onClickPause={onClickPause}
           onClickUnpause={onClickUnpause}
-
+          isOwner={contractOwner === userInfo.address}
           ethClaim={ethClaim}
           usdcClaim={usdcClaim}
           connected={connected}
           noClaim={noClaim}
           usdPerETH={usdPerETH}
+          rateUpdatedAt={rateUpdatedAt}
+          nextETHDeposit={nextETHDeposit}
+          nextUSDCDeposit={nextUSDCDeposit}
         />
         <KingOfTheFoolsHistory
           kingOfTheFools={kingOfTheFoolsHistory}
