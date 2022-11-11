@@ -249,10 +249,14 @@ function App() {
     const currentKing = await kingOfTheFoolsContractInstance.kingOfTheFools();
     if (currentKing === account.toString()) return alert("You are the current king! are you trying to overthrow yourself?");
     const weiValue = utils.parseEther(ethInput);
-    const depositTx = await kingOfTheFoolsContractInstance.depositETH({ value: weiValue });
+    try{
+      const depositTx = await kingOfTheFoolsContractInstance.depositETH({ value: weiValue });
 
-    await provider.getTransaction(depositTx.hash)
-    depositTx.wait();
+      await provider.getTransaction(depositTx.hash)
+      depositTx.wait();
+    }catch(e){
+      return alert("Insufficient Deposit")
+    }
 
     // Get new balances
     await getAccountDetails(account);
@@ -279,20 +283,24 @@ function App() {
 
     const contractAllowance = await usdcContractInstance.allowance(account.toString(), KING_OF_THE_FOOLS_ADDRESS);
 
-    if (+formatUnits(contractAllowance, 6) < usdcInput) {
-      const byApproval = window.confirm('Insufficient Allowance, Click OK to increase allowance or Cancel and we will use your signature to get everything done');
-      if (byApproval) {
-        await usdcContractInstance.approve(KING_OF_THE_FOOLS_ADDRESS, parseUnits(usdcInput, 6)); 
-        const usdcUnits = utils.parseUnits(usdcInput, 6);
-        const depositTx = await kingOfTheFoolsContractInstance.depositUSDCWithoutPermit(usdcUnits);
-
-        await provider.getTransaction(depositTx.hash)
-        depositTx.wait();
+    try{
+      if (+formatUnits(contractAllowance, 6) < usdcInput) {
+        const byApproval = window.confirm('Insufficient Allowance, Click OK to increase allowance or Cancel and we will use your signature to get everything done');
+        if (byApproval) {
+          await usdcContractInstance.approve(KING_OF_THE_FOOLS_ADDRESS, parseUnits(usdcInput, 6)); 
+          const usdcUnits = utils.parseUnits(usdcInput, 6);
+          const depositTx = await kingOfTheFoolsContractInstance.depositUSDCWithoutPermit(usdcUnits);
+  
+          await provider.getTransaction(depositTx.hash)
+          depositTx.wait();
+        }
+        else {
+          const receiveAuthorization = await getDataForReceiveWithPermit(usdcInput);
+          await kingOfTheFoolsContractInstance.depositUSDCWithPermit(receiveAuthorization);
+        }
       }
-      else {
-        const receiveAuthorization = await getDataForReceiveWithPermit(usdcInput);
-        await kingOfTheFoolsContractInstance.depositUSDCWithPermit(receiveAuthorization);
-      }
+    }catch(e){
+      return alert("Insufficient Deposit")
     }
 
 
