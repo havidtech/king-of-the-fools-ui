@@ -214,8 +214,7 @@ function App() {
     const owner = await kingOfTheFoolsContractInstance.owner();
     setContractOwner(owner);
     // set exchange rate
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    const priceAggregatorContractInstance = new Contract(PRICE_AGGREGATOR_ADDRESS, priceAggregatorAbi, provider);
+    const priceAggregatorContractInstance = new Contract(PRICE_AGGREGATOR_ADDRESS, priceAggregatorAbi, customProvider);
     const latestRound = await priceAggregatorContractInstance.latestRoundData();
     const usdPerETH = Number(latestRound[1]) / 10 ** 8;
     setUsdPerETH(usdPerETH);
