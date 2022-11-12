@@ -48,7 +48,7 @@ const MyClaim = ({
         <form onSubmit={onClickDepositETH} className={Styles.form} >
           <input
             type="string"
-            placeholder={`Deposit atleast ${nextETHDeposit}`}
+            placeholder={`atleast ${nextETHDeposit}`}
             className={Styles.input}
             value={ethInput}
             onChange={onChangeInput}
@@ -61,7 +61,7 @@ const MyClaim = ({
         <form onSubmit={onClickDepositUSDC} className={Styles.form} >
           <input
             type="string"
-            placeholder={`Deposit atleast ${nextUSDCDeposit}`}
+            placeholder={`atleast ${nextUSDCDeposit}`}
             className={Styles.input}
             value={usdcInput}
             onChange={onChangeInput}

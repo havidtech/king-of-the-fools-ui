@@ -76,10 +76,10 @@ function App() {
 
       // Get user Claims
       const userClaims = await kingOfTheFoolsContractInstance.pendingClaims(address);
+      const userUsdcClaim = Number(utils.formatUnits(userClaims[0], 6)).toPrecision(3);
+      const userETHClaim = Number(utils.formatEther(userClaims[1])).toPrecision(3);
 
-
-
-      return { userUSDCBalance, userETHBalance, userUsdcClaim: utils.formatUnits(userClaims[0], 6), userETHClaim: utils.formatEther(userClaims[1]) };
+      return { userUSDCBalance, userETHBalance, userUsdcClaim, userETHClaim};
     } catch (err) {
       console.log(err)
     }
@@ -243,12 +243,12 @@ function App() {
     if (highestDeposit != null && usdPerETH != null && highestDepositCurrency != null) {
       if (highestDepositCurrency === CURRENCY_ETH) {
         const etherDeposit = Number(formatEther(highestDeposit).toString());
-        setNextETHDeposit(etherDeposit * 1.5);
-        setNextUSDCDeposit(usdPerETH * etherDeposit * 1.5);
+        setNextETHDeposit((etherDeposit * 1.5).toPrecision(8));
+        setNextUSDCDeposit((usdPerETH * etherDeposit * 1.5).toPrecision(8));
       } else {
         const usdcDeposit = Number(formatUnits(highestDeposit.toString(), 6));
-        setNextUSDCDeposit(usdcDeposit * 1.5);
-        setNextETHDeposit((usdcDeposit / usdPerETH) * 1.5);
+        setNextUSDCDeposit((usdcDeposit * 1.5).toPrecision(8));
+        setNextETHDeposit(((usdcDeposit / usdPerETH) * 1.5).toPrecision(8));
       }
     }
   }, [usdPerETH, highestDeposit, highestDepositCurrency]);
